@@ -1,0 +1,21 @@
+name: homebrew-bump
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  bump:
+    name: bump tap formula
+    runs-on: macos-latest
+    environment: release
+    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
+    steps:
+      - uses: dawidd6/action-homebrew-bump-formula@v3
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          tap: FGRibreau/homebrew-tap
+          formula: mcp-server-odoo
+          tag: ${{ github.event.release.tag_name }}
+          revision: ${{ github.event.release.target_commitish }}
+          force: false

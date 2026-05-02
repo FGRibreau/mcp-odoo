@@ -93,15 +93,34 @@ A Rust MCP server that **dynamically discovers** your Odoo models and exposes th
 - **Structured errors** — HTTP 401 / 403 / 404 / 422 / 500 mapped to MCP errors
 - **Fast & small** — single Rust binary, no runtime dependencies
 
-## Quick Start
+## Install
 
-### Prerequisites
+### Homebrew (macOS / Linux)
 
-- Rust stable ([install](https://rustup.rs/))
-- An Odoo 19+ instance with API access
-- An Odoo API key (`Bearer` token) — see below
+```bash
+brew tap FGRibreau/tap
+brew install mcp-server-odoo
+```
 
-### 1. Build the project
+### Cargo
+
+```bash
+cargo install mcp-server-odoo
+```
+
+### `cargo binstall` (prebuilt binary, no compile)
+
+```bash
+cargo binstall mcp-server-odoo
+```
+
+### Prebuilt binaries
+
+Grab a tarball/zip for your platform from [Releases](https://github.com/fgribreau/mcp-odoo/releases). Targets shipped:
+
+`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-apple-darwin`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc`, `aarch64-pc-windows-msvc`.
+
+### From source
 
 ```bash
 git clone https://github.com/fgribreau/mcp-odoo.git
@@ -109,18 +128,25 @@ cd mcp-odoo
 cargo build --release
 ```
 
-### 2. Configure
+## Quick Start
+
+### Prerequisites
+
+- An Odoo 19+ instance with API access
+- An Odoo API key (`Bearer` token) — see below
+
+### 1. Configure
 
 ```bash
 cp .env.example .env
 # Edit .env with your values — every variable is documented inline
 ```
 
-### 3. Add to Claude Code
+### 2. Add to Claude Code
 
 ```bash
 claude mcp add odoo \
-  --command /absolute/path/to/target/release/mcp-server-odoo \
+  --command mcp-server-odoo \
   --env "ODOO_URL=https://your-odoo-instance.com" \
   --env "ODOO_API_KEY=YOUR_API_KEY" \
   --env "ODOO_DB=your-database"

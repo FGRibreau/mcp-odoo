@@ -11,6 +11,7 @@ readme = "README.md"
 authors = ["François-Guillaume Ribreau <github@fgribreau.com>"]
 keywords = ["mcp", "odoo", "claude", "ai", "erp"]
 categories = ["command-line-utilities", "api-bindings"]
+exclude = [".github/*", "release-plz.toml"]
 
 [[bin]]
 name = "mcp-server-odoo"
@@ -37,3 +38,8 @@ pulldown-cmark = "0.12"
 
 [features]
 integration = []
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
