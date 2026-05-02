@@ -1,0 +1,47 @@
+# Usage:
+#   Start:       docker compose -f docker-compose.test.yml up -d
+#   Wait:        until curl -sf http://localhost:18069/web/login; do sleep 2; done
+#   Run tests:   ODOO_TEST_URL=http://localhost:18069 ODOO_TEST_DB=test_odoo cargo test --features integration
+#   Stop:        docker compose -f docker-compose.test.yml down -v
+#
+# API Key Setup:
+#   Integration tests require an Odoo API key for JSON-RPC/XML-RPC authentication.
+#   After Odoo is healthy, either:
+#     1. Create one programmatically via XML-RPC (authenticate as admin/admin,
+#        then call res.users/api_key_wizard to generate a key), or
+#     2. Let the integration test suite handle it in a setup fixture.
+#   Pass the key via ODOO_TEST_API_KEY env var.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DB: postgres
+    ports:
+      - "15432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odoo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  odoo:
+    image: odoo:19
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    ports:
+      - "18069:8069"
+    command: odoo --database test_odoo --init base --without-demo all
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8069/web/login || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s

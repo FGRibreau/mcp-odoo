@@ -1,0 +1,39 @@
+[package]
+name = "mcp-server-odoo"
+version = "0.1.0"
+edition = "2021"
+description = "MCP server for Odoo 19+ via the JSON/2 API — connect Claude and any MCP client to your Odoo ERP"
+license = "MIT"
+repository = "https://github.com/fgribreau/mcp-odoo"
+homepage = "https://github.com/fgribreau/mcp-odoo"
+documentation = "https://github.com/fgribreau/mcp-odoo#readme"
+readme = "README.md"
+authors = ["François-Guillaume Ribreau <github@fgribreau.com>"]
+keywords = ["mcp", "odoo", "claude", "ai", "erp"]
+categories = ["command-line-utilities", "api-bindings"]
+
+[[bin]]
+name = "mcp-server-odoo"
+path = "src/main.rs"
+
+[dependencies]
+rmcp = { version = "0.12", features = ["server", "transport-io"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["rustls-tls", "json"] }
+anyhow = "1"
+thiserror = "2"
+clap = { version = "4", features = ["derive", "env"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+glob-match = "0.2"
+regex = "1"
+base64 = "0.22"
+chrono = { version = "0.4", features = ["serde"] }
+mime_guess = "2"
+pulldown-cmark = "0.12"
+
+[features]
+integration = []

@@ -1,0 +1,18 @@
+# Rust build artifacts
+/target/
+**/target/
+
+# Local environment
+.env
+.envrc
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Tooling state
+.claude-flow/
