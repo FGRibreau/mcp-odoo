@@ -23,7 +23,9 @@ async fn main() -> Result<()> {
     let config = config::Config::parse();
     info!("Connecting to Odoo at {}", config.odoo_url);
 
-    let client = odoo_client::OdooClient::new(&config).context("Failed to create Odoo client")?;
+    let client = odoo_client::OdooClient::new(&config)
+        .await
+        .context("Failed to create Odoo client")?;
 
     let service = service::OdooService::new(config, client);
 

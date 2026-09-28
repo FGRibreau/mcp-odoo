@@ -41,7 +41,7 @@ impl ServerHandler for OdooService {
                 website_url: None,
             },
             instructions: Some(
-                "Odoo MCP server providing tools to interact with an Odoo instance via JSON/2 API."
+                "Odoo MCP server providing tools to interact with an Odoo instance via its JSON/2 (Odoo 19+) or classic JSON-RPC (Odoo <= 18) API."
                     .to_string(),
             ),
         }
