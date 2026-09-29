@@ -1,21 +1,44 @@
 name: homebrew-bump
 
+# Bumps the source-built formula in FGRibreau/homebrew-tap to a released tag.
+#
+# A `release` event runs this file as it exists at the tagged commit, so a fix
+# merged after a release never reaches that release's run: `workflow_dispatch`
+# re-runs the bump for any existing tag from the current main.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to bump the formula to (e.g. v0.2.0)
+        required: true
+        type: string
 
 jobs:
   bump:
     name: bump tap formula
     runs-on: macos-latest
     environment: release
-    if: ${{ !github.event.release.prerelease && !github.event.release.draft }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (!github.event.release.prerelease && !github.event.release.draft) }}
     steps:
-      - uses: dawidd6/action-homebrew-bump-formula@v3
+      # The formula pins `tag:` + `revision:`; Homebrew rejects a revision that
+      # is not the tag's commit. `release.target_commitish` is a branch name
+      # ("main") for release-plz releases, so resolve the commit from the tag.
+      - name: resolve tag and commit
+        id: ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "revision=${sha}" >> "$GITHUB_OUTPUT"
+      - uses: dawidd6/action-homebrew-bump-formula@v10
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           tap: FGRibreau/homebrew-tap
           formula: mcp-server-odoo
-          tag: ${{ github.event.release.tag_name }}
-          revision: ${{ github.event.release.target_commitish }}
+          tag: ${{ steps.ref.outputs.tag }}
+          revision: ${{ steps.ref.outputs.revision }}
           force: false
