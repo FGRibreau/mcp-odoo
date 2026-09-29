@@ -1,0 +1,48 @@
+# Disposable Odoo 16 (classic JSON-RPC external API) for integration tests.
+#
+# Odoo <= 18 has no JSON/2 endpoint, so the client authenticates via
+# POST /jsonrpc and talks to object.execute_kw. Odoo 16 accepts the admin
+# *password* as the credential in `authenticate`, so no API key wizard is
+# needed — pass ODOO_TEST_API_KEY=admin and ODOO_TEST_LOGIN=admin.
+#
+# Usage (unique project name so teardown never touches other containers):
+#   docker compose -p mcp-odoo-it16 -f docker-compose.test16.yml up -d
+#   until curl -sf http://localhost:16069/web/login; do sleep 2; done
+#   ODOO_TEST_URL=http://localhost:16069 ODOO_TEST_DB=test_odoo \
+#   ODOO_TEST_LOGIN=admin ODOO_TEST_API_KEY=admin ODOO_TEST_PROTOCOL=auto \
+#     cargo test --features integration
+#   docker compose -p mcp-odoo-it16 -f docker-compose.test16.yml down -v
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+      POSTGRES_DB: postgres
+    ports:
+      - "16432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odoo"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  odoo:
+    image: odoo:16
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+    ports:
+      - "16069:8069"
+    command: odoo --database test_odoo --init base --without-demo all
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost',8069)); s.close()\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s

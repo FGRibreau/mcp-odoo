@@ -9,11 +9,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"/></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-stable-orange.svg" alt="Rust"/></a>
   <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-2024--11--05-6366f1.svg" alt="MCP"/></a>
-  <a href="https://www.odoo.com"><img src="https://img.shields.io/badge/odoo-19%2B-a855f7.svg" alt="Odoo 19+"/></a>
+  <a href="https://www.odoo.com"><img src="https://img.shields.io/badge/odoo-16%2B-a855f7.svg" alt="Odoo 16+"/></a>
 </p>
 
 <p align="center">
-  <strong>A Model Context Protocol (MCP) server that exposes any Odoo 19+ instance to Claude and other MCP-compatible AI assistants via the native JSON/2 API.</strong>
+  <strong>A Model Context Protocol (MCP) server that exposes any Odoo instance to Claude and other MCP-compatible AI assistants — the native JSON/2 API on Odoo 19+, the classic JSON-RPC external API on Odoo 16–18, auto-detected.</strong>
 </p>
 
 ---
@@ -80,10 +80,16 @@
 
 ## Overview
 
-A Rust MCP server that **dynamically discovers** your Odoo models and exposes them as tools. Claude (or any MCP client) can browse, search, read, create, update, and delete records on your Odoo instance through the native JSON/2 API — no plugin to install on the Odoo side, just an API key.
+A Rust MCP server that **dynamically discovers** your Odoo models and exposes them as tools. Claude (or any MCP client) can browse, search, read, create, update, and delete records on your Odoo instance — no plugin to install on the Odoo side, just an API key.
+
+It speaks two wire protocols behind one identical tool surface and picks the right one automatically at startup:
+
+- **Odoo 19+** — the native **JSON/2** API (`POST /json/2/{model}/{method}`, Bearer API key).
+- **Odoo 16–18** — the classic **JSON-RPC** external API (`POST /jsonrpc`, `execute_kw`), which also needs the user login (`ODOO_LOGIN`).
 
 ### Features
 
+- **Odoo 16 → 19** — one binary, JSON/2 on 19+ and classic JSON-RPC on 16–18, auto-detected
 - **Dynamic discovery** — automatically lists and introspects all accessible Odoo models
 - **Full CRUD** — `search`, `read`, `create`, `write`, `delete` records on any model
 - **Arbitrary methods** — call any public ORM method via `call_method`
@@ -132,8 +138,9 @@ cargo build --release
 
 ### Prerequisites
 
-- An Odoo 19+ instance with API access
-- An Odoo API key (`Bearer` token) — see below
+- An Odoo instance with API access (Odoo 16 or newer)
+- An Odoo API key — see below (on Odoo 16–18 the classic API also accepts the user password)
+- On Odoo 16–18, the user login/email (`ODOO_LOGIN`)
 
 ### 1. Configure
 
@@ -236,12 +243,25 @@ All options can be set via env vars **or** CLI flags (`--odoo-url`, `--odoo-api-
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ODOO_URL` | **yes** | — | Base URL of your Odoo instance (no trailing slash) |
-| `ODOO_API_KEY` | **yes** | — | API key (Bearer token) for JSON/2 authentication |
+| `ODOO_API_KEY` | **yes** | — | API key. On Odoo 19+ (JSON/2) this must be a Bearer API key; on Odoo 16–18 (JSON-RPC) it may be the API key **or** the user password |
 | `ODOO_DB` | **yes** | — | PostgreSQL database name |
+| `ODOO_PROTOCOL` | no | `auto` | Wire protocol: `auto` (detect from server version), `json2` (Odoo 19+), or `jsonrpc` (Odoo 16–18) |
+| `ODOO_LOGIN` | conditional | — | User login/email. **Required** when the resolved protocol is `jsonrpc` (Odoo 16–18); ignored for `json2` |
 | `MODEL_INCLUDE` | no | `*` | Comma-separated glob patterns for models to expose |
 | `MODEL_EXCLUDE` | no | *(empty)* | Comma-separated glob patterns for models to hide |
 | `READ_ONLY` | no | `false` | Block all write operations |
 | `PAGE_SIZE` | no | `80` | Default records per `search` page |
+
+### Odoo versions & protocols
+
+The server talks to Odoo over one of two wire protocols and exposes the exact same tools either way:
+
+| Odoo version | Protocol | Transport | Extra config |
+|--------------|----------|-----------|--------------|
+| 19+ | `json2` | `POST /json/2/{model}/{method}` with a Bearer API key | — |
+| 16–18 | `jsonrpc` | `POST /jsonrpc` → `object.execute_kw` | `ODOO_LOGIN` (user login/email) |
+
+With `ODOO_PROTOCOL=auto` (the default) the server calls the unauthenticated `/web/webclient/version_info` endpoint once at startup and picks `json2` for Odoo ≥ 19, `jsonrpc` otherwise. On the JSON-RPC path it authenticates once at startup (login + key/password) and caches the resulting user id. Set `ODOO_PROTOCOL` explicitly to skip auto-detection (e.g. behind a reverse proxy that masks the version).
 
 ### Model filtering
 
@@ -356,8 +376,10 @@ mcp-server-odoo [OPTIONS]
 
 Options:
       --odoo-url <ODOO_URL>          URL of the Odoo instance [env: ODOO_URL]
-      --odoo-api-key <ODOO_API_KEY>  Bearer token for Odoo API authentication [env: ODOO_API_KEY]
+      --odoo-api-key <ODOO_API_KEY>  API key (or password on the JSON-RPC external API) [env: ODOO_API_KEY]
       --odoo-db <ODOO_DB>            Odoo database name [env: ODOO_DB]
+      --odoo-protocol <PROTOCOL>     Wire protocol: auto, json2, jsonrpc [env: ODOO_PROTOCOL] [default: auto]
+      --odoo-login <ODOO_LOGIN>      User login/email — required for the JSON-RPC protocol [env: ODOO_LOGIN]
       --model-include <PATTERNS>     Comma-separated glob patterns for inclusion [env: MODEL_INCLUDE] [default: *]
       --model-exclude <PATTERNS>     Comma-separated glob patterns for exclusion [env: MODEL_EXCLUDE]
       --read-only                    Block all write operations [env: READ_ONLY]
@@ -382,14 +404,36 @@ cargo test --features integration
 RUST_LOG=debug ./target/debug/mcp-server-odoo
 ```
 
-Integration tests require additional env vars: `ODOO_TEST_URL`, `ODOO_TEST_API_KEY`, `ODOO_TEST_DB`. A `docker-compose.test.yml` is provided to spin up a disposable Odoo 19 + Postgres for testing:
+Integration tests are **black-box** (no mocks): they drive the public library API against a **real** Odoo server. The same suite runs unchanged against both protocols; only the environment differs, which is what proves the two transports behave identically.
+
+Env vars: `ODOO_TEST_URL`, `ODOO_TEST_DB`, `ODOO_TEST_API_KEY`, and — for the JSON-RPC path — `ODOO_TEST_LOGIN`. `ODOO_TEST_PROTOCOL` (default `auto`) mirrors `ODOO_PROTOCOL`.
+
+**Odoo 19 (JSON/2).** `docker-compose.test.yml` spins up a disposable Odoo 19 + Postgres. JSON/2 needs a real Bearer API key; generate one with `odoo shell`:
 
 ```bash
-docker compose -f docker-compose.test.yml up -d
+docker compose -p mcp-odoo-it19 -f docker-compose.test.yml up -d
 until curl -sf http://localhost:18069/web/login; do sleep 2; done
-ODOO_TEST_URL=http://localhost:18069 ODOO_TEST_DB=test_odoo \
+KEY=$(docker compose -p mcp-odoo-it19 -f docker-compose.test.yml exec -T odoo \
+  odoo shell -d test_odoo --no-http --db_host=db --db_user=odoo --db_password=odoo <<'PY' 2>/dev/null | sed -n 's/^APIKEY=//p'
+admin = env.ref('base.user_admin')
+print('APIKEY=' + env['res.users.apikeys'].with_user(admin)._generate('rpc', 'mcp-it', False))
+env.cr.commit()
+PY
+)
+ODOO_TEST_URL=http://localhost:18069 ODOO_TEST_DB=test_odoo ODOO_TEST_API_KEY=$KEY \
   cargo test --features integration
-docker compose -f docker-compose.test.yml down -v
+docker compose -p mcp-odoo-it19 -f docker-compose.test.yml down -v
+```
+
+**Odoo 16 (JSON-RPC).** `docker-compose.test16.yml` spins up a disposable Odoo 16 + Postgres. The classic API accepts the admin password directly, so no key wizard is needed:
+
+```bash
+docker compose -p mcp-odoo-it16 -f docker-compose.test16.yml up -d
+until curl -sf http://localhost:16069/web/login; do sleep 2; done
+ODOO_TEST_URL=http://localhost:16069 ODOO_TEST_DB=test_odoo \
+  ODOO_TEST_LOGIN=admin ODOO_TEST_API_KEY=admin ODOO_TEST_PROTOCOL=auto \
+  cargo test --features integration
+docker compose -p mcp-odoo-it16 -f docker-compose.test16.yml down -v
 ```
 
 ## Troubleshooting
@@ -406,7 +450,11 @@ The key is valid but the underlying user lacks access to a specific model. Adjus
 
 ### `404 Not Found` on `/json/2/...`
 
-The JSON/2 endpoint is only available on **Odoo 19+**. Older versions only ship XML-RPC and the legacy JSON-RPC endpoint.
+The JSON/2 endpoint only exists on **Odoo 19+**. With `ODOO_PROTOCOL=auto` (the default) the server detects this and uses the classic JSON-RPC external API instead, so you should not see this error. If you forced `ODOO_PROTOCOL=json2` against an older server, drop the override (or set `jsonrpc`) and provide `ODOO_LOGIN`.
+
+### `ODOO_LOGIN is required for the JSON-RPC transport`
+
+The server resolved to the classic JSON-RPC protocol (Odoo 16–18) but no user login was given. Set `ODOO_LOGIN` to the login/email of the API user.
 
 ### `Could not connect` / timeouts
 
