@@ -97,6 +97,7 @@ It speaks two wire protocols behind one identical tool surface and picks the rig
 - **Read-only mode** — block all write operations for safe production observability
 - **Pagination** — configurable page size with `has_more` / `next_offset` metadata
 - **Structured errors** — HTTP 401 / 403 / 404 / 422 / 500 mapped to MCP errors
+- **stdio or HTTP** — spawned by the client over stdio, or run as a remote tool server over MCP streamable HTTP (Open WebUI, shared deployments)
 - **Fast & small** — single Rust binary, no runtime dependencies
 
 ## Install
@@ -251,6 +252,60 @@ All options can be set via env vars **or** CLI flags (`--odoo-url`, `--odoo-api-
 | `MODEL_EXCLUDE` | no | *(empty)* | Comma-separated glob patterns for models to hide |
 | `READ_ONLY` | no | `false` | Block all write operations |
 | `PAGE_SIZE` | no | `80` | Default records per `search` page |
+| `MCP_TRANSPORT` | no | `stdio` | MCP transport: `stdio` (client spawns the binary) or `http` (streamable HTTP, see [HTTP transport](#http-transport)) |
+| `MCP_BIND` | no | `127.0.0.1:8000` | Listen address of the HTTP transport |
+
+### HTTP transport
+
+By default the server speaks MCP over stdio. With `--transport http` (or `MCP_TRANSPORT=http`) it serves **MCP streamable HTTP** instead, so clients that connect to a remote tool server, such as Open WebUI, can use it:
+
+```bash
+mcp-server-odoo --transport http --bind 127.0.0.1:8000 \
+  --odoo-url https://your-odoo-instance.com \
+  --odoo-api-key YOUR_API_KEY \
+  --odoo-db your-database \
+  --read-only
+```
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST/GET/DELETE /mcp` | MCP streamable HTTP endpoint (stateful sessions, `Mcp-Session-Id` header) |
+| `GET /health` | Liveness probe, answers `200 ok` |
+
+Limits: request bodies above 4 MiB get `413`, a request that has not produced its response headers after 30 s gets `408`, and a session idle for 30 minutes is closed (the client re-initializes). SIGINT/SIGTERM stop the server after at most 10 s of draining.
+
+> **Security.** The HTTP transport has no authentication: anyone who can reach the port acts with `ODOO_API_KEY`. The default bind is loopback; when exposing it (e.g. `0.0.0.0` in a container), keep it on a private network and prefer `READ_ONLY=true`. Requests carrying an `Origin` header are refused with `403`, which blocks browser-driven DNS-rebinding attacks; MCP clients that run server-side do not send one.
+
+#### Docker
+
+The repository ships a `Dockerfile` (static musl build, ~25 MB Alpine image, non-root user, HTTP transport on `0.0.0.0:8000` with a `/health` healthcheck):
+
+```bash
+docker build -t mcp-server-odoo .
+```
+
+Example compose service next to Open WebUI:
+
+```yaml
+services:
+  mcp-odoo:
+    build: https://github.com/fgribreau/mcp-odoo.git
+    environment:
+      ODOO_URL: https://your-odoo-instance.com
+      ODOO_API_KEY: ${ODOO_API_KEY}
+      ODOO_DB: your-database
+      READ_ONLY: "true"
+    restart: unless-stopped
+    # no `ports:`: only services on the compose network can reach it
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    depends_on:
+      mcp-odoo:
+        condition: service_healthy
+```
+
+In Open WebUI, add a tool server of type **MCP (Streamable HTTP)** with the URL `http://mcp-odoo:8000/mcp` and no authentication.
 
 ### Odoo versions & protocols
 
@@ -384,6 +439,8 @@ Options:
       --model-exclude <PATTERNS>     Comma-separated glob patterns for exclusion [env: MODEL_EXCLUDE]
       --read-only                    Block all write operations [env: READ_ONLY]
       --page-size <PAGE_SIZE>        Default page size for list operations [env: PAGE_SIZE] [default: 80]
+      --transport <TRANSPORT>        MCP transport: stdio, http [env: MCP_TRANSPORT] [default: stdio]
+      --bind <BIND>                  Listen address of the HTTP transport (endpoint `/mcp`) [env: MCP_BIND] [default: 127.0.0.1:8000]
   -h, --help                         Print help
   -V, --version                      Print version
 ```
@@ -394,7 +451,7 @@ Options:
 # Build debug version
 cargo build
 
-# Run unit tests
+# Run unit tests and the HTTP transport tests (no Odoo needed)
 cargo test
 
 # Run unit + integration tests (requires a live Odoo instance)
