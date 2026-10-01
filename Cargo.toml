@@ -18,7 +18,10 @@ name = "mcp-server-odoo"
 path = "src/main.rs"
 
 [dependencies]
-rmcp = { version = "0.12", features = ["server", "transport-io"] }
+rmcp = { version = "0.12", features = ["server", "transport-io", "transport-streamable-http-server"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+tower-http = { version = "0.6", features = ["limit", "timeout"] }
+tokio-util = "0.7"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
