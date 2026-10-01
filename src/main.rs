@@ -1,5 +1,6 @@
 mod config;
 mod error;
+mod http;
 mod model_filter;
 mod odoo_client;
 mod service;
@@ -27,14 +28,21 @@ async fn main() -> Result<()> {
         .await
         .context("Failed to create Odoo client")?;
 
+    let transport = config.transport;
+    let bind = config.bind;
     let service = service::OdooService::new(config, client);
 
-    info!("Starting MCP stdio transport...");
-    let server = service
-        .serve(stdio())
-        .await
-        .context("Failed to start MCP server")?;
-    server.waiting().await?;
+    match transport {
+        config::McpTransport::Stdio => {
+            info!("Starting MCP stdio transport...");
+            let server = service
+                .serve(stdio())
+                .await
+                .context("Failed to start MCP server")?;
+            server.waiting().await?;
+        }
+        config::McpTransport::Http => http::serve(service, bind).await?,
+    }
 
     info!("MCP server stopped");
     Ok(())

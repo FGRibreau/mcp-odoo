@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use clap::{Parser, ValueEnum};
 use url::Url;
 
@@ -19,6 +21,15 @@ pub enum Protocol {
     Json2,
     /// Classic external API of Odoo <= 18 (`POST /jsonrpc`).
     Jsonrpc,
+}
+
+/// Transport the MCP server listens on.
+#[derive(ValueEnum, Debug, Clone, Copy, PartialEq, Eq)]
+pub enum McpTransport {
+    /// JSON-RPC over stdin/stdout, for clients that spawn the server as a subprocess.
+    Stdio,
+    /// MCP streamable HTTP on `/mcp`, for clients that connect to a remote tool server.
+    Http,
 }
 
 #[derive(Parser, Debug, Clone)]
@@ -59,6 +70,14 @@ pub struct Config {
     /// Default page size for list operations
     #[arg(long, env = "PAGE_SIZE", default_value_t = 80)]
     pub page_size: u32,
+
+    /// MCP transport: stdio (default) or streamable HTTP
+    #[arg(long, env = "MCP_TRANSPORT", default_value = "stdio")]
+    pub transport: McpTransport,
+
+    /// Listen address of the HTTP transport (endpoint `/mcp`)
+    #[arg(long, env = "MCP_BIND", default_value = "127.0.0.1:8000")]
+    pub bind: SocketAddr,
 }
 
 impl Config {
