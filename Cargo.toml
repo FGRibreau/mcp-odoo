@@ -1,6 +1,6 @@
 [package]
 name = "mcp-server-odoo"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "MCP server for Odoo 16+ (JSON/2 on 19+, classic JSON-RPC on 16-18) — connect Claude and any MCP client to your Odoo ERP"
 license = "MIT"
