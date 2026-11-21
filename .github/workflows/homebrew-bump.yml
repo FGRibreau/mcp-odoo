@@ -34,7 +34,7 @@ jobs:
           sha=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "revision=${sha}" >> "$GITHUB_OUTPUT"
-      - uses: dawidd6/action-homebrew-bump-formula@v10
+      - uses: dawidd6/action-homebrew-bump-formula@v11
         with:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           tap: FGRibreau/homebrew-tap
